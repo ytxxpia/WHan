@@ -6,90 +6,115 @@
 </head>
 <body style="background:white;">
 
-    <h1>sth/</h1>
-    <div id="root">加载中...</div>
+    <h1>选择仓库文件夹</h1>
+    <input type="file" id="folderInput" webkitdirectory multiple>
+    <div id="root"></div>
 
     <script>
-        // ===== 配置 =====
-        const OWNER = '你的用户名';
-        const REPO = '你的仓库名';
-        const PATH = 'sth';
-        const TOKEN = ''; // 有 token 就填，没有就留空
-        // =================
+        document.getElementById('folderInput').addEventListener('change', function(e) {
+            const files = e.target.files;
+            const root = document.getElementById('root');
+            root.innerHTML = '';
 
-        const API = `https://api.github.com/repos/${OWNER}/${REPO}/contents`;
-
-        async function fetchDir(path) {
-            try {
-                const headers = {};
-                if (TOKEN) {
-                    headers['Authorization'] = `token ${TOKEN}`;
-                }
-                const res = await fetch(`${API}/${path}`, { headers });
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-                }
-                return await res.json();
-            } catch (e) {
-                return { error: true, message: e.message };
-            }
-        }
-
-        function render(items, container, path) {
-            container.innerHTML = '';
-            
-            if (items && items.error) {
-                container.textContent = '错误: ' + items.message;
+            if (files.length === 0) {
+                root.textContent = '未选择文件夹';
                 return;
             }
 
-            if (!Array.isArray(items)) {
-                container.textContent = '错误: 数据格式异常';
+            // 获取选中的根文件夹名
+            let rootFolderName = '';
+            if (files.length > 0) {
+                const firstPath = files[0].webkitRelativePath;
+                rootFolderName = firstPath.split('/')[0];
+            }
+
+            // 只处理 sth/ 目录下的内容
+            const sthFiles = [];
+            for (const file of files) {
+                const pathParts = file.webkitRelativePath.split('/');
+                // 检查是否在 sth/ 目录下
+                if (pathParts.length >= 2 && pathParts[0] === rootFolderName && pathParts[1] === 'sth') {
+                    sthFiles.push({
+                        file: file,
+                        relativePath: pathParts.slice(2).join('/')
+                    });
+                }
+            }
+
+            if (sthFiles.length === 0) {
+                root.textContent = '未找到 sth/ 文件夹';
                 return;
             }
 
-            // 过滤掉 keep.md
-            const filtered = items.filter(item => item.name !== 'keep.md');
+            // 构建树结构
+            const tree = {};
+            for (const item of sthFiles) {
+                const path = item.relativePath.split('/');
+                let current = tree;
+                for (let i = 0; i < path.length; i++) {
+                    const name = path[i];
+                    if (i === path.length - 1) {
+                        // 文件
+                        if (!current._files) current._files = [];
+                        current._files.push(item.file);
+                    } else {
+                        // 文件夹
+                        if (!current[name]) current[name] = {};
+                        current = current[name];
+                    }
+                }
+            }
 
-            filtered.sort((a, b) => (a.type === 'dir' ? -1 : 1));
-
-            const ul = document.createElement('ul');
-            for (const item of filtered) {
-                const li = document.createElement('li');
-
-                if (item.type === 'dir') {
+            // 渲染树
+            function renderTree(node, container) {
+                const ul = document.createElement('ul');
+                const keys = Object.keys(node).filter(k => k !== '_files').sort();
+                
+                for (const key of keys) {
+                    const li = document.createElement('li');
                     const a = document.createElement('a');
                     a.href = '#';
-                    a.textContent = item.name + '/';
-                    a.onclick = async (e) => {
+                    a.textContent = key + '/';
+                    a.onclick = (e) => {
                         e.preventDefault();
-                        const sub = await fetchDir(item.path);
                         let subUl = li.querySelector('ul');
                         if (!subUl) {
                             subUl = document.createElement('ul');
                             li.appendChild(subUl);
-                        }
-                        if (subUl.dataset.loaded === 'true') {
+                            renderTree(node[key], subUl);
+                        } else {
                             subUl.style.display = subUl.style.display === 'none' ? 'block' : 'none';
-                            return;
                         }
-                        render(sub, subUl, item.path);
-                        subUl.dataset.loaded = 'true';
                     };
                     li.appendChild(a);
-                } else {
-                    const a = document.createElement('a');
-                    a.href = item.download_url;
-                    a.textContent = item.name;
-                    a.target = '_blank';
-                    li.appendChild(a);
+                    ul.appendChild(li);
                 }
-                ul.appendChild(li);
-            }
-            container.appendChild(ul);
-        }
 
-        fetchDir(PATH).then(data => render(data, document.getElementById('root'), PATH));
+                // 渲染文件（过滤 keep.md）
+                if (node._files) {
+                    const files = node._files.filter(f => f.name !== 'keep.md');
+                    for (const file of files) {
+                        const li = document.createElement('li');
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(file);
+                        a.textContent = file.name;
+                        a.target = '_blank';
+                        li.appendChild(a);
+                        ul.appendChild(li);
+                    }
+                }
+
+                container.appendChild(ul);
+            }
+
+            // 显示根目录标题
+            const title = document.createElement('h2');
+            title.textContent = 'sth/';
+            root.appendChild(title);
+
+            renderTree(tree, root);
+        });
     </script>
+
 </body>
 </html>
