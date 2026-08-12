@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>文件索引</title>
+</head>
+<body style="background:white;">
+
+    <h1>sth/</h1>
+    <div id="root">加载中...</div>
+
+    <script>
+        // ===== 配置 =====
+        const OWNER = '你的用户名';
+        const REPO = '你的仓库名';
+        const PATH = 'sth';
+        // =================
+
+        const API = `https://api.github.com/repos/${OWNER}/${REPO}/contents`;
+
+        async function fetchDir(path) {
+            const res = await fetch(`${API}/${path}`);
+            if (!res.ok) throw new Error('加载失败');
+            return await res.json();
+        }
+
+        function render(items, container, path) {
+            container.innerHTML = '';
+            if (!Array.isArray(items)) {
+                container.textContent = '加载失败';
+                return;
+            }
+
+            items.sort((a, b) => (a.type === 'dir' ? -1 : 1));
+
+            const ul = document.createElement('ul');
+            for (const item of items) {
+                const li = document.createElement('li');
+
+                if (item.type === 'dir') {
+                    const a = document.createElement('a');
+                    a.href = '#';
+                    a.textContent = item.name + '/';
+                    a.onclick = async (e) => {
+                        e.preventDefault();
+                        const sub = await fetchDir(item.path);
+                        let subUl = li.querySelector('ul');
+                        if (!subUl) {
+                            subUl = document.createElement('ul');
+                            li.appendChild(subUl);
+                        }
+                        if (subUl.dataset.loaded === 'true') {
+                            subUl.style.display = subUl.style.display === 'none' ? 'block' : 'none';
+                            return;
+                        }
+                        render(sub, subUl, item.path);
+                        subUl.dataset.loaded = 'true';
+                    };
+                    li.appendChild(a);
+                } else {
+                    const a = document.createElement('a');
+                    a.href = item.download_url;
+                    a.textContent = item.name;
+                    a.target = '_blank';
+                    li.appendChild(a);
+                }
+                ul.appendChild(li);
+            }
+            container.appendChild(ul);
+        }
+
+        fetchDir(PATH).then(data => render(data, document.getElementById('root'), PATH));
+    </script>
+</body>
+</html>
