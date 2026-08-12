@@ -14,27 +14,47 @@
         const OWNER = '你的用户名';
         const REPO = '你的仓库名';
         const PATH = 'sth';
+        const TOKEN = ''; // 有 token 就填，没有就留空
         // =================
 
         const API = `https://api.github.com/repos/${OWNER}/${REPO}/contents`;
 
         async function fetchDir(path) {
-            const res = await fetch(`${API}/${path}`);
-            if (!res.ok) throw new Error('加载失败');
-            return await res.json();
+            try {
+                const headers = {};
+                if (TOKEN) {
+                    headers['Authorization'] = `token ${TOKEN}`;
+                }
+                const res = await fetch(`${API}/${path}`, { headers });
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                return await res.json();
+            } catch (e) {
+                return { error: true, message: e.message };
+            }
         }
 
         function render(items, container, path) {
             container.innerHTML = '';
-            if (!Array.isArray(items)) {
-                container.textContent = '加载失败';
+            
+            if (items && items.error) {
+                container.textContent = '错误: ' + items.message;
                 return;
             }
 
-            items.sort((a, b) => (a.type === 'dir' ? -1 : 1));
+            if (!Array.isArray(items)) {
+                container.textContent = '错误: 数据格式异常';
+                return;
+            }
+
+            // 过滤掉 keep.md
+            const filtered = items.filter(item => item.name !== 'keep.md');
+
+            filtered.sort((a, b) => (a.type === 'dir' ? -1 : 1));
 
             const ul = document.createElement('ul');
-            for (const item of items) {
+            for (const item of filtered) {
                 const li = document.createElement('li');
 
                 if (item.type === 'dir') {
